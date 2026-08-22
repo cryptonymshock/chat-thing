@@ -8,6 +8,7 @@ bindings = [
   { name = "rooms", class_name = "ChatRoom" },
   { name = "limiters", class_name = "RateLimiter" },
   { name = "users", class_name = "UserMailbox" },
+  { name = "groups", class_name = "GroupChat" },
 ]
 
 [[rules]]
@@ -24,3 +25,8 @@ new_sqlite_classes = ["ChatRoom", "RateLimiter"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["UserMailbox"]
+
+# GroupChat is a new class added after that, so it also gets its own migration entry.
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["GroupChat"]
