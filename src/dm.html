@@ -1,101 +1,815 @@
 <!DOCTYPE html>
-<!--
-  Minimal test page for direct messaging with real accounts.
-  Not styled or polished -- just enough to prove that alice can sign up, log in, and message
-  bob (showing up as "alice") without carol seeing it.
--->
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Messages</title>
     <style>
-      body { font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
-      #auth-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-      #auth-form input { flex: 1; min-width: 120px; padding: 6px; }
-      #auth-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
-      #auth-buttons button { flex: 1; padding: 8px; }
-      #send-form { display: none; gap: 8px; margin-bottom: 16px; }
-      #send-form input { flex: 1; padding: 6px; }
-      button { padding: 6px 12px; }
-      #log { border: 1px solid #ccc; padding: 8px; height: 300px; overflow-y: auto; margin-bottom: 16px; }
-      #log p { margin: 0 0 6px 0; }
-      .mine { color: #06c; }
-      .theirs { color: #090; }
-      .sys { color: #888; font-style: italic; }
-      .err { color: #c00; }
-      #status { font-weight: bold; margin-bottom: 8px; min-height: 1.2em; }
+      :root {
+        --bubble-blue: #0B93F6;
+        --bubble-gray: #E9E9EB;
+        --accent: #007AFF;
+        --sidebar-bg: #F7F7F8;
+        --border: #E3E3E6;
+        --text-primary: #1C1C1E;
+        --text-secondary: #8E8E93;
+        --danger: #FF3B30;
+        --success: #34C759;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--text-primary);
+        background: #fff;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      input {
+        font-family: inherit;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+
+      /* ============================= Auth screen ============================= */
+
+      #auth-screen {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #FAFAFB 0%, #F2F2F4 100%);
+        padding: 24px;
+      }
+
+      #auth-card {
+        width: 100%;
+        max-width: 340px;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.08);
+        padding: 32px 28px 28px;
+        text-align: center;
+      }
+
+      #auth-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 16px;
+        border-radius: 16px;
+        background: linear-gradient(160deg, #34C8FF, var(--bubble-blue));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #auth-icon svg { width: 28px; height: 28px; }
+
+      #auth-card h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+
+      #auth-card p.sub {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin: 0 0 24px;
+      }
+
+      #auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      #auth-form input {
+        border: 1px solid var(--border);
+        background: var(--sidebar-bg);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 15px;
+        outline: none;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+
+      #auth-form input:focus {
+        border-color: var(--accent);
+        background: #fff;
+      }
+
+      #auth-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      #auth-buttons button {
+        flex: 1;
+        padding: 11px;
+        border-radius: 10px;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        transition: opacity 0.15s ease, transform 0.1s ease;
+      }
+
+      #auth-buttons button:active { transform: scale(0.97); }
+
+      #login-btn {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      #signup-btn {
+        background: var(--sidebar-bg);
+        color: var(--text-primary);
+        border: 1px solid var(--border) !important;
+      }
+
+      #auth-status {
+        min-height: 18px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-top: 14px;
+      }
+
+      #auth-status.err { color: var(--danger); }
+      #auth-status.ok { color: var(--success); }
+
+      /* ============================= App shell ============================= */
+
+      #app {
+        display: none;
+        height: 100%;
+      }
+
+      #app.active { display: flex; }
+
+      #sidebar {
+        width: 320px;
+        min-width: 320px;
+        background: var(--sidebar-bg);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+
+      #sidebar-header {
+        padding: 16px 16px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      #sidebar-header h2 {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      #compose-btn, #logout-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        transition: transform 0.1s ease;
+      }
+
+      #compose-btn:active, #logout-btn:active { transform: scale(0.92); }
+
+      #compose-btn svg, #logout-btn svg { width: 16px; height: 16px; }
+
+      #sidebar-subheader {
+        padding: 0 16px 10px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      #conn-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        display: inline-block;
+        margin-right: 5px;
+        transition: background 0.2s ease;
+      }
+
+      #conn-dot.live { background: var(--success); }
+
+      #conversation-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 8px;
+      }
+
+      .conv-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.12s ease;
+      }
+
+      .conv-row:hover { background: rgba(0,0,0,0.04); }
+      .conv-row.selected { background: #E4F0FF; }
+
+      .avatar {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        font-size: 15px;
+      }
+
+      .conv-meta {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .conv-top-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+
+      .conv-name {
+        font-size: 14.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .conv-time {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        margin-left: 6px;
+      }
+
+      .conv-preview {
+        font-size: 13px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 1px;
+      }
+
+      #empty-sidebar {
+        padding: 40px 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* ============================= Main / thread pane ============================= */
+
+      #main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      #thread-header {
+        height: 56px;
+        min-height: 56px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 20px;
+      }
+
+      #back-btn {
+        display: none;
+        border: none;
+        background: none;
+        font-size: 20px;
+        color: var(--accent);
+        padding: 0 6px 0 0;
+      }
+
+      #thread-header .avatar { width: 32px; height: 32px; font-size: 12px; }
+
+      #thread-title {
+        font-weight: 600;
+        font-size: 15px;
+      }
+
+      #thread-subtitle {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+      }
+
+      #thread-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #welcome-pane {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        color: var(--text-secondary);
+        gap: 10px;
+        text-align: center;
+        padding: 20px;
+      }
+
+      #welcome-pane svg { width: 48px; height: 48px; opacity: 0.35; }
+      #welcome-pane h3 { margin: 0; color: var(--text-primary); font-size: 16px; }
+      #welcome-pane p { margin: 0; font-size: 13px; max-width: 260px; }
+
+      .date-sep {
+        text-align: center;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        margin: 10px 0 14px;
+      }
+
+      .msg-row {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 3px;
+        max-width: 72%;
+        animation: msg-in 0.16s ease;
+      }
+
+      @keyframes msg-in {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .msg-row.mine { align-self: flex-end; align-items: flex-end; }
+      .msg-row.theirs { align-self: flex-start; align-items: flex-start; }
+
+      .msg-sender {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        margin: 0 4px 2px;
+      }
+
+      .bubble {
+        padding: 8px 14px;
+        border-radius: 18px;
+        font-size: 14.5px;
+        line-height: 1.35;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+      }
+
+      .msg-row.mine .bubble {
+        background: var(--bubble-blue);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .msg-row.theirs .bubble {
+        background: var(--bubble-gray);
+        color: var(--text-primary);
+        border-bottom-left-radius: 4px;
+      }
+
+      .msg-row.system { align-self: center; max-width: 90%; }
+      .msg-row.system .bubble {
+        background: transparent;
+        color: var(--danger);
+        font-size: 12.5px;
+        text-align: center;
+      }
+
+      #composer {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+      }
+
+      #message-input {
+        flex: 1;
+        border: 1px solid var(--border);
+        background: var(--sidebar-bg);
+        border-radius: 20px;
+        padding: 10px 16px;
+        font-size: 14.5px;
+        outline: none;
+        resize: none;
+        max-height: 120px;
+        line-height: 1.3;
+        transition: border-color 0.15s ease;
+      }
+
+      #message-input:focus { border-color: var(--accent); }
+
+      #send-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: none;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: transform 0.1s ease, opacity 0.15s ease;
+      }
+
+      #send-btn:disabled { opacity: 0.35; }
+      #send-btn:not(:disabled):active { transform: scale(0.92); }
+      #send-btn svg { width: 15px; height: 15px; }
+
+      /* ============================= New message overlay ============================= */
+
+      #overlay-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.28);
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        animation: fade-in 0.14s ease;
+      }
+
+      #overlay-backdrop.active { display: flex; }
+
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+      #overlay-card {
+        width: 100%;
+        max-width: 360px;
+        background: #fff;
+        border-radius: 16px;
+        padding: 22px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      }
+
+      #overlay-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      #overlay-header h3 { margin: 0; font-size: 16px; }
+
+      #overlay-close {
+        border: none;
+        background: var(--sidebar-bg);
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        color: var(--text-secondary);
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      #overlay-tabs {
+        display: flex;
+        background: var(--sidebar-bg);
+        border-radius: 9px;
+        padding: 3px;
+        margin-bottom: 16px;
+      }
+
+      #overlay-tabs button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        padding: 7px;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      #overlay-tabs button.active {
+        background: #fff;
+        color: var(--text-primary);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      }
+
+      .overlay-field {
+        margin-bottom: 12px;
+      }
+
+      .overlay-field label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+
+      .overlay-field input {
+        width: 100%;
+        border: 1px solid var(--border);
+        background: var(--sidebar-bg);
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+      }
+
+      .overlay-field input:focus { border-color: var(--accent); }
+
+      .overlay-submit {
+        width: 100%;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 11px;
+        border-radius: 9px;
+        margin-top: 4px;
+      }
+
+      #overlay-status {
+        min-height: 16px;
+        font-size: 12.5px;
+        color: var(--danger);
+        margin-top: 10px;
+        text-align: center;
+      }
+
+      /* ============================= Responsive: single-pane on narrow screens ============================= */
+
+      @media (max-width: 720px) {
+        #sidebar { width: 100%; min-width: 0; border-right: none; }
+        #app.show-thread #sidebar { display: none; }
+        #app:not(.show-thread) #main { display: none; }
+        #back-btn { display: block; }
+      }
     </style>
   </head>
   <body>
-    <h2>Direct Message demo</h2>
-    <div id="status">Not connected.</div>
 
-    <form id="auth-form">
-      <input id="username-input" placeholder="Username" maxlength="32" autocomplete="username">
-      <input id="password-input" type="password" placeholder="Password" maxlength="256" autocomplete="current-password">
-    </form>
-    <div id="auth-buttons">
-      <button id="signup-btn" type="button">Sign Up</button>
-      <button id="login-btn" type="button">Log In</button>
+    <!-- ============================= Auth screen ============================= -->
+    <div id="auth-screen">
+      <div id="auth-card">
+        <div id="auth-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 4h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-5 4V6a1 1 0 0 1 1-1z" fill="#fff" fill-opacity="0.95"/>
+          </svg>
+        </div>
+        <h1>Messages</h1>
+        <p class="sub">Sign in or create an account to start chatting.</p>
+        <form id="auth-form" onsubmit="return false;">
+          <input id="username-input" placeholder="Username" maxlength="32" autocomplete="username">
+          <input id="password-input" type="password" placeholder="Password" maxlength="256" autocomplete="current-password">
+        </form>
+        <div id="auth-buttons">
+          <button id="signup-btn" type="button">Sign Up</button>
+          <button id="login-btn" type="button">Log In</button>
+        </div>
+        <div id="auth-status"></div>
+      </div>
     </div>
 
-    <div id="log"></div>
+    <!-- ============================= Main app ============================= -->
+    <div id="app">
+      <div id="sidebar">
+        <div id="sidebar-header">
+          <h2>Messages</h2>
+          <div style="display:flex; gap:8px;">
+            <button id="compose-btn" title="New message">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+            <button id="logout-btn" title="Log out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="sidebar-subheader">
+          <span><span id="conn-dot"></span><span id="conn-label">Connecting…</span></span>
+          <span id="self-label"></span>
+        </div>
+        <div id="conversation-list"></div>
+      </div>
 
-    <form id="send-form">
-      <input id="to-id" placeholder="To (username)" maxlength="32">
-      <input id="message-input" placeholder="Message" maxlength="1000">
-      <button type="submit">Send</button>
-    </form>
+      <div id="main">
+        <div id="welcome-pane">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 4h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-5 4V6a1 1 0 0 1 1-1z"/>
+          </svg>
+          <h3>No conversation selected</h3>
+          <p>Pick someone from the list, or tap the compose button to start a new message or group.</p>
+        </div>
+
+        <div id="thread-header" style="display:none;">
+          <button id="back-btn">‹</button>
+          <div id="thread-avatar" class="avatar"></div>
+          <div>
+            <div id="thread-title"></div>
+            <div id="thread-subtitle"></div>
+          </div>
+        </div>
+        <div id="thread-scroll" style="display:none;"></div>
+        <div id="composer" style="display:none;">
+          <textarea id="message-input" rows="1" placeholder="Message" maxlength="1000"></textarea>
+          <button id="send-btn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= New message overlay ============================= -->
+    <div id="overlay-backdrop">
+      <div id="overlay-card">
+        <div id="overlay-header">
+          <h3>New Message</h3>
+          <button id="overlay-close">✕</button>
+        </div>
+        <div id="overlay-tabs">
+          <button id="tab-dm" class="active" type="button">Direct Message</button>
+          <button id="tab-group" type="button">New Group</button>
+        </div>
+
+        <div id="dm-panel">
+          <div class="overlay-field">
+            <label>To (username)</label>
+            <input id="dm-to-input" placeholder="e.g. bob" maxlength="32">
+          </div>
+          <button id="dm-start-btn" class="overlay-submit" type="button">Start Conversation</button>
+        </div>
+
+        <div id="group-panel" style="display:none;">
+          <div class="overlay-field">
+            <label>Group name</label>
+            <input id="group-name-input" placeholder="e.g. Weekend Trip" maxlength="64">
+          </div>
+          <div class="overlay-field">
+            <label>Members (comma-separated usernames)</label>
+            <input id="group-members-input" placeholder="e.g. bob, carol">
+          </div>
+          <button id="group-create-btn" class="overlay-submit" type="button">Create Group</button>
+        </div>
+
+        <div id="overlay-status"></div>
+      </div>
+    </div>
 
     <script>
-      let ws = null;
+      // ===================================================================
+      // State
+      // ===================================================================
       let selfId = null;
+      let token = null;
+      let ws = null;
+      let currentKey = null;
 
+      // conversations: Map from key ("dm:username" or "group:groupId") to
+      // { type, id, name, messages: [...], lastMessage, lastFrom, timestamp }
+      let conversations = new Map();
+
+      const AVATAR_COLORS = ["#FF9F0A", "#FF3B30", "#FF2D55", "#AF52DE", "#5856D6", "#007AFF", "#34C759", "#00C7BE"];
+
+      function colorForName(name) {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+        return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+      }
+
+      function initialsForName(name) {
+        return name.slice(0, 2).toUpperCase();
+      }
+
+      // ===================================================================
+      // DOM refs
+      // ===================================================================
+      const authScreen = document.querySelector("#auth-screen");
       const usernameInput = document.querySelector("#username-input");
       const passwordInput = document.querySelector("#password-input");
       const signupBtn = document.querySelector("#signup-btn");
       const loginBtn = document.querySelector("#login-btn");
-      const authForm = document.querySelector("#auth-form");
-      const authButtons = document.querySelector("#auth-buttons");
-      const sendForm = document.querySelector("#send-form");
-      const toIdInput = document.querySelector("#to-id");
-      const messageInput = document.querySelector("#message-input");
-      const log = document.querySelector("#log");
-      const status = document.querySelector("#status");
+      const authStatus = document.querySelector("#auth-status");
 
-      function addLine(text, cls) {
-        let p = document.createElement("p");
-        if (cls) p.className = cls;
-        p.textContent = text;
-        log.appendChild(p);
-        log.scrollTop = log.scrollHeight;
+      const app = document.querySelector("#app");
+      const selfLabel = document.querySelector("#self-label");
+      const connDot = document.querySelector("#conn-dot");
+      const connLabel = document.querySelector("#conn-label");
+      const conversationList = document.querySelector("#conversation-list");
+      const composeBtn = document.querySelector("#compose-btn");
+      const logoutBtn = document.querySelector("#logout-btn");
+      const backBtn = document.querySelector("#back-btn");
+
+      const welcomePane = document.querySelector("#welcome-pane");
+      const threadHeader = document.querySelector("#thread-header");
+      const threadAvatar = document.querySelector("#thread-avatar");
+      const threadTitle = document.querySelector("#thread-title");
+      const threadSubtitle = document.querySelector("#thread-subtitle");
+      const threadScroll = document.querySelector("#thread-scroll");
+      const composer = document.querySelector("#composer");
+      const messageInput = document.querySelector("#message-input");
+      const sendBtn = document.querySelector("#send-btn");
+
+      const overlayBackdrop = document.querySelector("#overlay-backdrop");
+      const overlayClose = document.querySelector("#overlay-close");
+      const tabDm = document.querySelector("#tab-dm");
+      const tabGroup = document.querySelector("#tab-group");
+      const dmPanel = document.querySelector("#dm-panel");
+      const groupPanel = document.querySelector("#group-panel");
+      const dmToInput = document.querySelector("#dm-to-input");
+      const dmStartBtn = document.querySelector("#dm-start-btn");
+      const groupNameInput = document.querySelector("#group-name-input");
+      const groupMembersInput = document.querySelector("#group-members-input");
+      const groupCreateBtn = document.querySelector("#group-create-btn");
+      const overlayStatus = document.querySelector("#overlay-status");
+
+      // ===================================================================
+      // Networking helpers
+      // ===================================================================
+      function hostAndProtocol() {
+        let hostname = window.location.host || "edge-chat-demo.cloudflareworkers.com";
+        let httpProto = window.location.protocol === "http:" ? "http:" : "https:";
+        let wsProto = window.location.protocol === "http:" ? "ws://" : "wss://";
+        return {hostname, httpProto, wsProto};
       }
 
       function apiUrl(name, action) {
-        let hostname = window.location.host || "edge-chat-demo.cloudflareworkers.com";
-        let protocol = window.location.protocol === "http:" ? "http:" : "https:";
-        return protocol + "//" + hostname + "/api/user/" + encodeURIComponent(name) + "/" + action;
+        let {hostname, httpProto} = hostAndProtocol();
+        return httpProto + "//" + hostname + "/api/user/" + encodeURIComponent(name) + "/" + action;
       }
 
+      function groupApiUrl(action) {
+        let {hostname, httpProto} = hostAndProtocol();
+        return httpProto + "//" + hostname + "/api/group" + (action ? "/" + action : "");
+      }
+
+      // ===================================================================
+      // Auth
+      // ===================================================================
       signupBtn.addEventListener("click", async () => {
         let username = usernameInput.value.trim();
         let password = passwordInput.value;
         if (!username || !password) {
-          status.textContent = "Enter a username and password first.";
+          setAuthStatus("Enter a username and password first.", "err");
           return;
         }
-        status.textContent = "Signing up...";
+        setAuthStatus("Signing up…");
         try {
           let response = await fetch(apiUrl(username, "signup"), {
             method: "POST",
             body: JSON.stringify({password}),
           });
           if (!response.ok) {
-            status.textContent = "Sign up failed: " + (await response.text());
+            setAuthStatus(await response.text(), "err");
             return;
           }
-          status.textContent = "Account created. Now log in.";
+          setAuthStatus("Account created — now log in.", "ok");
         } catch (err) {
-          status.textContent = "Sign up failed: " + err;
+          setAuthStatus("Sign up failed: " + err, "err");
         }
       });
 
@@ -103,73 +817,423 @@
         let username = usernameInput.value.trim();
         let password = passwordInput.value;
         if (!username || !password) {
-          status.textContent = "Enter a username and password first.";
+          setAuthStatus("Enter a username and password first.", "err");
           return;
         }
-        status.textContent = "Logging in...";
+        setAuthStatus("Logging in…");
         try {
           let response = await fetch(apiUrl(username, "login"), {
             method: "POST",
             body: JSON.stringify({password}),
           });
           if (!response.ok) {
-            status.textContent = "Log in failed: " + (await response.text());
+            setAuthStatus(await response.text(), "err");
             return;
           }
-          let {token} = await response.json();
+          let body = await response.json();
           selfId = username;
-          connect(token);
+          token = body.token;
+          localStorage.setItem("dm-selfId", selfId);
+          localStorage.setItem("dm-token", token);
+          enterApp();
         } catch (err) {
-          status.textContent = "Log in failed: " + err;
+          setAuthStatus("Log in failed: " + err, "err");
         }
       });
 
-      sendForm.addEventListener("submit", event => {
-        event.preventDefault();
-        let to = toIdInput.value.trim();
-        let message = messageInput.value.trim();
-        if (!to || !message || !ws) return;
-        ws.send(JSON.stringify({to, message}));
-        messageInput.value = "";
+      function setAuthStatus(text, cls) {
+        authStatus.textContent = text;
+        authStatus.className = cls || "";
+      }
+
+      logoutBtn.addEventListener("click", () => {
+        localStorage.removeItem("dm-selfId");
+        localStorage.removeItem("dm-token");
+        if (ws) ws.close();
+        location.reload();
       });
 
-      function connect(token) {
-        let hostname = window.location.host || "edge-chat-demo.cloudflareworkers.com";
-        let wss = window.location.protocol === "http:" ? "ws://" : "wss://";
-        let url = wss + hostname + "/api/user/" + encodeURIComponent(selfId) +
+      // Try to resume a session saved in this browser.
+      (function tryResume() {
+        let savedId = localStorage.getItem("dm-selfId");
+        let savedToken = localStorage.getItem("dm-token");
+        if (savedId && savedToken) {
+          selfId = savedId;
+          token = savedToken;
+          enterApp();
+        }
+      })();
+
+      // ===================================================================
+      // Entering the app: fetch conversation summaries, then connect.
+      // ===================================================================
+      async function enterApp() {
+        authScreen.style.display = "none";
+        app.classList.add("active");
+        selfLabel.textContent = selfId;
+
+        try {
+          let url = apiUrl(selfId, "conversations") + "?token=" + encodeURIComponent(token);
+          let response = await fetch(url);
+          if (response.ok) {
+            let body = await response.json();
+            for (let c of body.conversations) {
+              let key = c.type + ":" + c.id;
+              conversations.set(key, {
+                type: c.type, id: c.id, name: c.name,
+                lastMessage: c.lastMessage, lastFrom: c.lastFrom, timestamp: c.timestamp,
+                messages: [],
+              });
+            }
+            renderSidebar();
+          }
+        } catch (err) {
+          // Non-fatal -- the WebSocket backlog will still populate what it can.
+          console.log("Could not load conversation summary:", err);
+        }
+
+        connectWebSocket();
+      }
+
+      function connectWebSocket() {
+        let {hostname, wsProto} = hostAndProtocol();
+        let url = wsProto + hostname + "/api/user/" + encodeURIComponent(selfId) +
             "/websocket?token=" + encodeURIComponent(token);
         ws = new WebSocket(url);
 
         ws.addEventListener("open", () => {
-          status.textContent = "Connected as " + selfId;
-          authForm.style.display = "none";
-          authButtons.style.display = "none";
-          sendForm.style.display = "flex";
-          toIdInput.focus();
+          connDot.classList.add("live");
+          connLabel.textContent = "Connected";
         });
 
         ws.addEventListener("message", event => {
           let data = JSON.parse(event.data);
           if (data.error) {
-            addLine("Error: " + data.error, "err");
-          } else if (data.ready) {
-            addLine("-- connected, ready --", "sys");
-          } else if (data.from === selfId) {
-            addLine("me -> " + data.to + ": " + data.message, "mine");
-          } else {
-            addLine(data.from + " -> me: " + data.message, "theirs");
+            if (currentKey) appendSystemLine(data.error);
+            return;
           }
+          if (data.ready) {
+            connLabel.textContent = "Connected";
+            return;
+          }
+          handleIncomingMessage(data);
         });
 
         ws.addEventListener("close", () => {
-          status.textContent = "Disconnected.";
-          addLine("-- disconnected --", "sys");
+          connDot.classList.remove("live");
+          connLabel.textContent = "Disconnected — retrying…";
+          setTimeout(connectWebSocket, 3000);
         });
 
         ws.addEventListener("error", () => {
-          status.textContent = "Connection error.";
+          connLabel.textContent = "Connection error";
         });
       }
+
+      function handleIncomingMessage(data) {
+        let key, name;
+        if (data.groupId) {
+          key = "group:" + data.groupId;
+          name = data.groupName;
+        } else {
+          let peer = data.from === selfId ? data.to : data.from;
+          key = "dm:" + peer;
+          name = peer;
+        }
+
+        if (!conversations.has(key)) {
+          conversations.set(key, {
+            type: data.groupId ? "group" : "dm",
+            id: data.groupId || name,
+            name,
+            messages: [],
+            lastMessage: null, lastFrom: null, timestamp: 0,
+          });
+        }
+        let conv = conversations.get(key);
+        conv.messages.push(data);
+        conv.lastMessage = data.message;
+        conv.lastFrom = data.from;
+        conv.timestamp = data.timestamp;
+
+        renderSidebar();
+        if (key === currentKey) {
+          renderThreadMessages();
+        }
+      }
+
+      // ===================================================================
+      // Sidebar
+      // ===================================================================
+      function renderSidebar() {
+        let entries = Array.from(conversations.entries())
+          .sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+        conversationList.innerHTML = "";
+
+        if (entries.length === 0) {
+          let empty = document.createElement("div");
+          empty.id = "empty-sidebar";
+          empty.textContent = "No conversations yet. Tap + to message someone.";
+          conversationList.appendChild(empty);
+          return;
+        }
+
+        for (let [key, conv] of entries) {
+          let row = document.createElement("div");
+          row.className = "conv-row" + (key === currentKey ? " selected" : "");
+          row.addEventListener("click", () => openConversation(key));
+
+          let avatar = document.createElement("div");
+          avatar.className = "avatar";
+          avatar.style.background = colorForName(conv.name);
+          avatar.textContent = initialsForName(conv.name);
+
+          let meta = document.createElement("div");
+          meta.className = "conv-meta";
+
+          let topLine = document.createElement("div");
+          topLine.className = "conv-top-line";
+          let nameEl = document.createElement("div");
+          nameEl.className = "conv-name";
+          nameEl.textContent = conv.name;
+          topLine.appendChild(nameEl);
+
+          if (conv.timestamp) {
+            let timeEl = document.createElement("div");
+            timeEl.className = "conv-time";
+            timeEl.textContent = formatTime(conv.timestamp);
+            topLine.appendChild(timeEl);
+          }
+
+          let preview = document.createElement("div");
+          preview.className = "conv-preview";
+          if (conv.lastMessage) {
+            let prefix = conv.type === "group" && conv.lastFrom ? conv.lastFrom + ": " : "";
+            preview.textContent = prefix + conv.lastMessage;
+          } else {
+            preview.textContent = conv.type === "group" ? "New group" : "No messages yet";
+          }
+
+          meta.appendChild(topLine);
+          meta.appendChild(preview);
+          row.appendChild(avatar);
+          row.appendChild(meta);
+          conversationList.appendChild(row);
+        }
+      }
+
+      function formatTime(ts) {
+        let d = new Date(ts);
+        let now = new Date();
+        let sameDay = d.toDateString() === now.toDateString();
+        if (sameDay) {
+          return d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+        }
+        return d.toLocaleDateString([], {month: "short", day: "numeric"});
+      }
+
+      // ===================================================================
+      // Thread view
+      // ===================================================================
+      function openConversation(key) {
+        currentKey = key;
+        let conv = conversations.get(key);
+
+        welcomePane.style.display = "none";
+        threadHeader.style.display = "flex";
+        threadScroll.style.display = "flex";
+        composer.style.display = "flex";
+        app.classList.add("show-thread");
+
+        threadAvatar.style.background = colorForName(conv.name);
+        threadAvatar.textContent = initialsForName(conv.name);
+        threadTitle.textContent = conv.name;
+        threadSubtitle.textContent = conv.type === "group" ? "Group chat" : "Direct message";
+
+        renderSidebar();
+        renderThreadMessages();
+        messageInput.focus();
+      }
+
+      backBtn.addEventListener("click", () => {
+        app.classList.remove("show-thread");
+      });
+
+      function renderThreadMessages() {
+        let conv = conversations.get(currentKey);
+        threadScroll.innerHTML = "";
+
+        if (!conv.messages.length) {
+          let placeholder = document.createElement("div");
+          placeholder.style.cssText = "text-align:center; color:#8E8E93; font-size:13px; margin-top:20px;";
+          placeholder.textContent = "No messages loaded in this session yet. Send one to get started.";
+          threadScroll.appendChild(placeholder);
+          return;
+        }
+
+        let lastTimestamp = 0;
+        for (let msg of conv.messages) {
+          if (msg.timestamp - lastTimestamp > 5 * 60 * 1000) {
+            let sep = document.createElement("div");
+            sep.className = "date-sep";
+            sep.textContent = new Date(msg.timestamp).toLocaleString([], {
+              month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+            });
+            threadScroll.appendChild(sep);
+          }
+          lastTimestamp = msg.timestamp;
+
+          let mine = msg.from === selfId;
+          let row = document.createElement("div");
+          row.className = "msg-row " + (mine ? "mine" : "theirs");
+
+          if (conv.type === "group" && !mine) {
+            let senderLabel = document.createElement("div");
+            senderLabel.className = "msg-sender";
+            senderLabel.textContent = msg.from;
+            row.appendChild(senderLabel);
+          }
+
+          let bubble = document.createElement("div");
+          bubble.className = "bubble";
+          bubble.textContent = msg.message;
+          row.appendChild(bubble);
+
+          threadScroll.appendChild(row);
+        }
+
+        threadScroll.scrollTop = threadScroll.scrollHeight;
+      }
+
+      function appendSystemLine(text) {
+        let row = document.createElement("div");
+        row.className = "msg-row system";
+        let bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = text;
+        row.appendChild(bubble);
+        threadScroll.appendChild(row);
+        threadScroll.scrollTop = threadScroll.scrollHeight;
+      }
+
+      // ===================================================================
+      // Composer
+      // ===================================================================
+      messageInput.addEventListener("input", () => {
+        sendBtn.disabled = messageInput.value.trim().length === 0;
+        messageInput.style.height = "auto";
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+      });
+
+      messageInput.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          sendCurrentMessage();
+        }
+      });
+
+      sendBtn.addEventListener("click", sendCurrentMessage);
+
+      function sendCurrentMessage() {
+        let text = messageInput.value.trim();
+        if (!text || !currentKey || !ws) return;
+        let conv = conversations.get(currentKey);
+
+        if (conv.type === "group") {
+          ws.send(JSON.stringify({groupId: conv.id, message: text}));
+        } else {
+          ws.send(JSON.stringify({to: conv.id, message: text}));
+        }
+
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        sendBtn.disabled = true;
+      }
+
+      // ===================================================================
+      // New message / new group overlay
+      // ===================================================================
+      composeBtn.addEventListener("click", () => {
+        overlayBackdrop.classList.add("active");
+        overlayStatus.textContent = "";
+        dmToInput.value = "";
+        groupNameInput.value = "";
+        groupMembersInput.value = "";
+        dmToInput.focus();
+      });
+
+      overlayClose.addEventListener("click", () => overlayBackdrop.classList.remove("active"));
+      overlayBackdrop.addEventListener("click", event => {
+        if (event.target === overlayBackdrop) overlayBackdrop.classList.remove("active");
+      });
+
+      tabDm.addEventListener("click", () => {
+        tabDm.classList.add("active");
+        tabGroup.classList.remove("active");
+        dmPanel.style.display = "block";
+        groupPanel.style.display = "none";
+        overlayStatus.textContent = "";
+      });
+
+      tabGroup.addEventListener("click", () => {
+        tabGroup.classList.add("active");
+        tabDm.classList.remove("active");
+        groupPanel.style.display = "block";
+        dmPanel.style.display = "none";
+        overlayStatus.textContent = "";
+      });
+
+      dmStartBtn.addEventListener("click", () => {
+        let peer = dmToInput.value.trim();
+        if (!peer) {
+          overlayStatus.textContent = "Enter a username.";
+          return;
+        }
+        if (peer === selfId) {
+          overlayStatus.textContent = "You can't message yourself.";
+          return;
+        }
+        let key = "dm:" + peer;
+        if (!conversations.has(key)) {
+          conversations.set(key, {
+            type: "dm", id: peer, name: peer,
+            messages: [], lastMessage: null, lastFrom: null, timestamp: Date.now(),
+          });
+        }
+        overlayBackdrop.classList.remove("active");
+        openConversation(key);
+      });
+
+      groupCreateBtn.addEventListener("click", async () => {
+        let name = groupNameInput.value.trim() || "New Group";
+        let members = groupMembersInput.value.split(",").map(s => s.trim()).filter(Boolean);
+        if (members.length === 0) {
+          overlayStatus.textContent = "Add at least one other member.";
+          return;
+        }
+        overlayStatus.textContent = "Creating group…";
+        try {
+          let response = await fetch(groupApiUrl(""), {
+            method: "POST",
+            body: JSON.stringify({creator: selfId, token, name, members}),
+          });
+          if (!response.ok) {
+            overlayStatus.textContent = await response.text();
+            return;
+          }
+          let body = await response.json();
+          let key = "group:" + body.id;
+          conversations.set(key, {
+            type: "group", id: body.id, name: body.name,
+            messages: [], lastMessage: null, lastFrom: null, timestamp: Date.now(),
+          });
+          overlayBackdrop.classList.remove("active");
+          openConversation(key);
+        } catch (err) {
+          overlayStatus.textContent = "Failed to create group: " + err;
+        }
+      });
     </script>
   </body>
 </html>
