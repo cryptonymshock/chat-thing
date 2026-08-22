@@ -15,6 +15,8 @@
         --text-secondary: #8E8E93;
         --danger: #FF3B30;
         --success: #34C759;
+        --group-grad-a: #7C6CF6;
+        --group-grad-b: #A66CF6;
       }
 
       * { box-sizing: border-box; }
@@ -131,6 +133,8 @@
       }
 
       #auth-buttons button:active { transform: scale(0.97); }
+
+      #auth-buttons button:disabled { opacity: 0.5; pointer-events: none; }
 
       #login-btn {
         background: var(--accent);
@@ -254,6 +258,12 @@
         font-size: 15px;
       }
 
+      .avatar.group-avatar {
+        background: linear-gradient(155deg, var(--group-grad-a), var(--group-grad-b));
+      }
+
+      .avatar svg { width: 20px; height: 20px; }
+
       .conv-meta {
         flex: 1;
         min-width: 0;
@@ -326,6 +336,7 @@
       }
 
       #thread-header .avatar { width: 32px; height: 32px; font-size: 12px; }
+      #thread-header .avatar svg { width: 16px; height: 16px; }
 
       #thread-title {
         font-weight: 600;
@@ -418,6 +429,20 @@
         font-size: 12.5px;
         text-align: center;
       }
+
+      .msg-status {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin: 3px 4px 8px;
+      }
+
+      .msg-status svg { width: 12px; height: 12px; }
+      .msg-status.delivered { color: var(--accent); }
+      .msg-status.delivered svg .tick2 { opacity: 1; }
+      .msg-status svg .tick2 { opacity: 0; }
 
       #composer {
         display: flex;
@@ -555,6 +580,7 @@
       }
 
       .overlay-field input:focus { border-color: var(--accent); }
+      .overlay-field .hint { font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; }
 
       .overlay-submit {
         width: 100%;
@@ -566,7 +592,10 @@
         padding: 11px;
         border-radius: 9px;
         margin-top: 4px;
+        transition: opacity 0.15s ease;
       }
+
+      .overlay-submit:disabled { opacity: 0.6; pointer-events: none; }
 
       #overlay-status {
         min-height: 16px;
@@ -692,6 +721,7 @@
           <div class="overlay-field">
             <label>Members (comma-separated usernames)</label>
             <input id="group-members-input" placeholder="e.g. bob, carol">
+            <div class="hint">You'll be added automatically.</div>
           </div>
           <button id="group-create-btn" class="overlay-submit" type="button">Create Group</button>
         </div>
@@ -710,7 +740,7 @@
       let currentKey = null;
 
       // conversations: Map from key ("dm:username" or "group:groupId") to
-      // { type, id, name, messages: [...], lastMessage, lastFrom, timestamp }
+      // { type, id, name, members?, messages: [...], lastMessage, lastFrom, timestamp }
       let conversations = new Map();
 
       const AVATAR_COLORS = ["#FF9F0A", "#FF3B30", "#FF2D55", "#AF52DE", "#5856D6", "#007AFF", "#34C759", "#00C7BE"];
@@ -723,6 +753,25 @@
 
       function initialsForName(name) {
         return name.slice(0, 2).toUpperCase();
+      }
+
+      const GROUP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>' +
+        '<circle cx="10" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>' +
+        '<path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+
+      // Fills an avatar element for a conversation -- a gradient "people" icon for groups,
+      // initials on a color derived from the name for DMs.
+      function paintAvatar(el, conv) {
+        if (conv.type === "group") {
+          el.classList.add("group-avatar");
+          el.style.background = "";
+          el.innerHTML = GROUP_ICON_SVG;
+        } else {
+          el.classList.remove("group-avatar");
+          el.style.background = colorForName(conv.name);
+          el.textContent = initialsForName(conv.name);
+        }
       }
 
       // ===================================================================
@@ -880,7 +929,7 @@
             for (let c of body.conversations) {
               let key = c.type + ":" + c.id;
               conversations.set(key, {
-                type: c.type, id: c.id, name: c.name,
+                type: c.type, id: c.id, name: c.name, members: c.members,
                 lastMessage: c.lastMessage, lastFrom: c.lastFrom, timestamp: c.timestamp,
                 messages: [],
               });
@@ -916,6 +965,10 @@
             connLabel.textContent = "Connected";
             return;
           }
+          if (data.groupJoined) {
+            handleGroupJoined(data.groupJoined);
+            return;
+          }
           handleIncomingMessage(data);
         });
 
@@ -928,6 +981,29 @@
         ws.addEventListener("error", () => {
           connLabel.textContent = "Connection error";
         });
+      }
+
+      // A GroupChat instance told our mailbox we were just added to a group -- make sure it's
+      // in the sidebar (even if we haven't received any messages in it yet) and keep the
+      // member list fresh if we already knew about it.
+      function handleGroupJoined(group) {
+        let key = "group:" + group.id;
+        if (!conversations.has(key)) {
+          conversations.set(key, {
+            type: "group", id: group.id, name: group.name, members: group.members,
+            messages: [], lastMessage: null, lastFrom: null, timestamp: Date.now(),
+          });
+        } else {
+          let conv = conversations.get(key);
+          conv.name = group.name;
+          conv.members = group.members;
+        }
+        renderSidebar();
+        if (key === currentKey) {
+          let conv = conversations.get(key);
+          threadTitle.textContent = conv.name;
+          threadSubtitle.textContent = memberSubtitle(conv);
+        }
       }
 
       function handleIncomingMessage(data) {
@@ -986,8 +1062,7 @@
 
           let avatar = document.createElement("div");
           avatar.className = "avatar";
-          avatar.style.background = colorForName(conv.name);
-          avatar.textContent = initialsForName(conv.name);
+          paintAvatar(avatar, conv);
 
           let meta = document.createElement("div");
           meta.className = "conv-meta";
@@ -1033,6 +1108,12 @@
         return d.toLocaleDateString([], {month: "short", day: "numeric"});
       }
 
+      function memberSubtitle(conv) {
+        if (conv.type !== "group") return "Direct message";
+        if (!conv.members) return "Group chat";
+        return conv.members.length + " member" + (conv.members.length === 1 ? "" : "s");
+      }
+
       // ===================================================================
       // Thread view
       // ===================================================================
@@ -1046,10 +1127,9 @@
         composer.style.display = "flex";
         app.classList.add("show-thread");
 
-        threadAvatar.style.background = colorForName(conv.name);
-        threadAvatar.textContent = initialsForName(conv.name);
+        paintAvatar(threadAvatar, conv);
         threadTitle.textContent = conv.name;
-        threadSubtitle.textContent = conv.type === "group" ? "Group chat" : "Direct message";
+        threadSubtitle.textContent = memberSubtitle(conv);
 
         renderSidebar();
         renderThreadMessages();
@@ -1059,6 +1139,36 @@
       backBtn.addEventListener("click", () => {
         app.classList.remove("show-thread");
       });
+
+      // Renders a small "Sent" / "Delivered" (or "Delivered to N/M" for groups) status line,
+      // shown only under the most recent outgoing message in the thread -- same convention
+      // as most messaging apps, so the thread doesn't get cluttered with a status under every
+      // single bubble.
+      function statusTextFor(conv, msg) {
+        if (conv.type === "group") {
+          if (msg.totalRecipients === undefined) return null;
+          if (msg.totalRecipients === 0) return {text: "Sent", delivered: false};
+          if (msg.deliveredCount >= msg.totalRecipients) return {text: "Delivered", delivered: true};
+          if (msg.deliveredCount > 0) {
+            return {text: "Delivered to " + msg.deliveredCount + "/" + msg.totalRecipients, delivered: true};
+          }
+          return {text: "Sent", delivered: false};
+        }
+        if (msg.delivered === undefined) return null;
+        return msg.delivered ? {text: "Delivered", delivered: true} : {text: "Sent", delivered: false};
+      }
+
+      function buildStatusEl(status) {
+        let el = document.createElement("div");
+        el.className = "msg-status" + (status.delivered ? " delivered" : "");
+        el.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+          'stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline class="tick1" points="4 12 9 17 20 6"/>' +
+          '<polyline class="tick2" points="9 12 14 17 20 6" transform="translate(-2,0)"/>' +
+          '</svg><span>' + status.text + '</span>';
+        return el;
+      }
 
       function renderThreadMessages() {
         let conv = conversations.get(currentKey);
@@ -1072,8 +1182,13 @@
           return;
         }
 
+        let lastMineIndex = -1;
+        for (let i = 0; i < conv.messages.length; i++) {
+          if (conv.messages[i].from === selfId) lastMineIndex = i;
+        }
+
         let lastTimestamp = 0;
-        for (let msg of conv.messages) {
+        conv.messages.forEach((msg, i) => {
           if (msg.timestamp - lastTimestamp > 5 * 60 * 1000) {
             let sep = document.createElement("div");
             sep.className = "date-sep";
@@ -1101,7 +1216,12 @@
           row.appendChild(bubble);
 
           threadScroll.appendChild(row);
-        }
+
+          if (mine && i === lastMineIndex) {
+            let status = statusTextFor(conv, msg);
+            if (status) threadScroll.appendChild(buildStatusEl(status));
+          }
+        });
 
         threadScroll.scrollTop = threadScroll.scrollHeight;
       }
@@ -1212,6 +1332,8 @@
           overlayStatus.textContent = "Add at least one other member.";
           return;
         }
+        groupCreateBtn.disabled = true;
+        overlayStatus.style.color = "";
         overlayStatus.textContent = "Creating group…";
         try {
           let response = await fetch(groupApiUrl(""), {
@@ -1220,18 +1342,21 @@
           });
           if (!response.ok) {
             overlayStatus.textContent = await response.text();
+            groupCreateBtn.disabled = false;
             return;
           }
           let body = await response.json();
           let key = "group:" + body.id;
           conversations.set(key, {
-            type: "group", id: body.id, name: body.name,
+            type: "group", id: body.id, name: body.name, members: body.members,
             messages: [], lastMessage: null, lastFrom: null, timestamp: Date.now(),
           });
+          groupCreateBtn.disabled = false;
           overlayBackdrop.classList.remove("active");
           openConversation(key);
         } catch (err) {
           overlayStatus.textContent = "Failed to create group: " + err;
+          groupCreateBtn.disabled = false;
         }
       });
     </script>
