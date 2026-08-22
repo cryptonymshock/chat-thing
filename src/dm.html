@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<!--
+  Minimal test page for direct messaging with real accounts.
+  Not styled or polished -- just enough to prove that alice can sign up, log in, and message
+  bob (showing up as "alice") without carol seeing it.
+-->
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+      #auth-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+      #auth-form input { flex: 1; min-width: 120px; padding: 6px; }
+      #auth-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+      #auth-buttons button { flex: 1; padding: 8px; }
+      #send-form { display: none; gap: 8px; margin-bottom: 16px; }
+      #send-form input { flex: 1; padding: 6px; }
+      button { padding: 6px 12px; }
+      #log { border: 1px solid #ccc; padding: 8px; height: 300px; overflow-y: auto; margin-bottom: 16px; }
+      #log p { margin: 0 0 6px 0; }
+      .mine { color: #06c; }
+      .theirs { color: #090; }
+      .sys { color: #888; font-style: italic; }
+      .err { color: #c00; }
+      #status { font-weight: bold; margin-bottom: 8px; min-height: 1.2em; }
+    </style>
+  </head>
+  <body>
+    <h2>Direct Message demo</h2>
+    <div id="status">Not connected.</div>
+
+    <form id="auth-form">
+      <input id="username-input" placeholder="Username" maxlength="32" autocomplete="username">
+      <input id="password-input" type="password" placeholder="Password" maxlength="256" autocomplete="current-password">
+    </form>
+    <div id="auth-buttons">
+      <button id="signup-btn" type="button">Sign Up</button>
+      <button id="login-btn" type="button">Log In</button>
+    </div>
+
+    <div id="log"></div>
+
+    <form id="send-form">
+      <input id="to-id" placeholder="To (username)" maxlength="32">
+      <input id="message-input" placeholder="Message" maxlength="1000">
+      <button type="submit">Send</button>
+    </form>
+
+    <script>
+      let ws = null;
+      let selfId = null;
+
+      const usernameInput = document.querySelector("#username-input");
+      const passwordInput = document.querySelector("#password-input");
+      const signupBtn = document.querySelector("#signup-btn");
+      const loginBtn = document.querySelector("#login-btn");
+      const authForm = document.querySelector("#auth-form");
+      const authButtons = document.querySelector("#auth-buttons");
+      const sendForm = document.querySelector("#send-form");
+      const toIdInput = document.querySelector("#to-id");
+      const messageInput = document.querySelector("#message-input");
+      const log = document.querySelector("#log");
+      const status = document.querySelector("#status");
+
+      function addLine(text, cls) {
+        let p = document.createElement("p");
+        if (cls) p.className = cls;
+        p.textContent = text;
+        log.appendChild(p);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function apiUrl(name, action) {
+        let hostname = window.location.host || "edge-chat-demo.cloudflareworkers.com";
+        let protocol = window.location.protocol === "http:" ? "http:" : "https:";
+        return protocol + "//" + hostname + "/api/user/" + encodeURIComponent(name) + "/" + action;
+      }
+
+      signupBtn.addEventListener("click", async () => {
+        let username = usernameInput.value.trim();
+        let password = passwordInput.value;
+        if (!username || !password) {
+          status.textContent = "Enter a username and password first.";
+          return;
+        }
+        status.textContent = "Signing up...";
+        try {
+          let response = await fetch(apiUrl(username, "signup"), {
+            method: "POST",
+            body: JSON.stringify({password}),
+          });
+          if (!response.ok) {
+            status.textContent = "Sign up failed: " + (await response.text());
+            return;
+          }
+          status.textContent = "Account created. Now log in.";
+        } catch (err) {
+          status.textContent = "Sign up failed: " + err;
+        }
+      });
+
+      loginBtn.addEventListener("click", async () => {
+        let username = usernameInput.value.trim();
+        let password = passwordInput.value;
+        if (!username || !password) {
+          status.textContent = "Enter a username and password first.";
+          return;
+        }
+        status.textContent = "Logging in...";
+        try {
+          let response = await fetch(apiUrl(username, "login"), {
+            method: "POST",
+            body: JSON.stringify({password}),
+          });
+          if (!response.ok) {
+            status.textContent = "Log in failed: " + (await response.text());
+            return;
+          }
+          let {token} = await response.json();
+          selfId = username;
+          connect(token);
+        } catch (err) {
+          status.textContent = "Log in failed: " + err;
+        }
+      });
+
+      sendForm.addEventListener("submit", event => {
+        event.preventDefault();
+        let to = toIdInput.value.trim();
+        let message = messageInput.value.trim();
+        if (!to || !message || !ws) return;
+        ws.send(JSON.stringify({to, message}));
+        messageInput.value = "";
+      });
+
+      function connect(token) {
+        let hostname = window.location.host || "edge-chat-demo.cloudflareworkers.com";
+        let wss = window.location.protocol === "http:" ? "ws://" : "wss://";
+        let url = wss + hostname + "/api/user/" + encodeURIComponent(selfId) +
+            "/websocket?token=" + encodeURIComponent(token);
+        ws = new WebSocket(url);
+
+        ws.addEventListener("open", () => {
+          status.textContent = "Connected as " + selfId;
+          authForm.style.display = "none";
+          authButtons.style.display = "none";
+          sendForm.style.display = "flex";
+          toIdInput.focus();
+        });
+
+        ws.addEventListener("message", event => {
+          let data = JSON.parse(event.data);
+          if (data.error) {
+            addLine("Error: " + data.error, "err");
+          } else if (data.ready) {
+            addLine("-- connected, ready --", "sys");
+          } else if (data.from === selfId) {
+            addLine("me -> " + data.to + ": " + data.message, "mine");
+          } else {
+            addLine(data.from + " -> me: " + data.message, "theirs");
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          status.textContent = "Disconnected.";
+          addLine("-- disconnected --", "sys");
+        });
+
+        ws.addEventListener("error", () => {
+          status.textContent = "Connection error.";
+        });
+      }
+    </script>
+  </body>
+</html>
